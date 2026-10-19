@@ -1,11 +1,12 @@
 # base defines a base stage that uses the official python runtime base image
-FROM python:3.11-slim AS base
+FROM python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce AS base
 
 # Add curl for healthcheck
 RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
-
+# Create a non-root user and group
+RUN groupadd -r votegroup && useradd -r -g votegroup voteuser
 # Set the application directory
 WORKDIR /usr/local/app
 
@@ -17,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM base AS dev
 RUN pip install watchdog
 ENV FLASK_ENV=development
+# Switch to non-root user
+USER voteuser
 CMD ["python", "app.py"]
 
 # final defines the stage that will bundle the application for production
@@ -24,7 +27,10 @@ FROM base AS final
 
 # Copy our code from the current folder to the working directory inside the container
 COPY . .
-
+# Change ownsership of files to the non-root user
+RUN chown -R voteuser:votegroup /usr/local/app
+# Switch to non-root user
+USER voteuser
 # Make port 80 available for links and/or publish
 EXPOSE 80
 
