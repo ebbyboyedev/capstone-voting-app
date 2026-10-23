@@ -237,3 +237,15 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4      
+            - name: Check whether the cluster exists
+              id: cluster
+              run: |
+                    if OUT=$(aws eks describe-cluster --name capstone_eks 2>&1); then
+                       echo "exists=true" >> "$GITHUB_OUTPUT"
+                    elif echo "$OUT" | grep -q "ResourceNotFoundException"; then
+                       echo "exists=false" >> "$GITHUB_OUTPUT"
+                       echo "Cluster not found, skipping deploy"
+                    else
+                       echo "$OUT"
+                      exit 1
+                    fi
