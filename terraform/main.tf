@@ -80,7 +80,21 @@ resource "aws_eks_access_policy_association" "me" {
     type = "cluster"
   }
 }
+resource "aws_eks_access_entry" "github-deploy" {
+  cluster_name  = aws_eks_cluster.capstone_eks.name
+  principal_arn = "arn:aws:iam::881050425297:user/github-deploy"
+}
 
+resource "aws_eks_access_policy_association" "github-deploy" {
+  cluster_name  = aws_eks_cluster.capstone_eks.name
+  principal_arn = aws_eks_access_entry.github-deploy.principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
+
+  access_scope {
+    type       = "namespace"
+    namespaces = ["default"]
+  }
+}
 # Create IAM Role for EKS Cluster
 
 resource "aws_iam_role" "cluster" {
@@ -147,7 +161,7 @@ resource "aws_eks_node_group" "capstone_eks_node_group" {
   node_group_name = "capstone-eks-node-group"
   node_role_arn   = aws_iam_role.capstone_eks_iam_role.arn
   subnet_ids      = data.aws_subnets.capstone_subnets.ids
-  instance_types = ["m7i-flex.large"]
+  instance_types  = ["m7i-flex.large"]
 
   scaling_config {
     desired_size = 1

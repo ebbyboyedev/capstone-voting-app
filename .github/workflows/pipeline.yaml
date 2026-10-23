@@ -20,7 +20,6 @@ jobs:
             - name: Run tests
               run:  sh scripts/smoke-test.sh
 
-
     scan:
         name: Scan
         runs-on: ubuntu-latest
@@ -226,3 +225,15 @@ jobs:
       # comment-enable: false
 
         needs: [test, scan]
+
+    deploy:
+        name: Deploy
+        runs-on: ubuntu-latest
+        needs: [build-vote, build-result, build-worker]
+        env:
+            AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            AWS_DEFAULT_REGION: us-east-1
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4      
