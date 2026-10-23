@@ -1,5 +1,10 @@
 #!/bin/sh
 
+for i in $(seq 1 30); do
+  curl -sf http://localhost:8080 > /dev/null && break
+  sleep 2
+done
+
 curl -sS -X POST --data "vote=b" http://localhost:8080 > /dev/null
 sleep 10
 
