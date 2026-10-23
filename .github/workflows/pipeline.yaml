@@ -1,0 +1,21 @@
+name: Test
+
+on:
+    push:
+        branches:
+            - main
+
+
+jobs:
+    test:
+        name: Test
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Start Docker service
+              run:  Docker compose up -d
+
+            - name: Run tests
+              run:  sh scripts/smoke-test.sh
