@@ -1,0 +1,15 @@
+vote:
+  image:
+    repository: ghcr.io/ebbyboyedev/capstone-voting-app-vote
+    tag: sha-afd82ac
+
+result:
+  image:
+    repository: ghcr.io/ebbyboyedev/capstone-voting-app-result
+    tag: sha-afd82ac
+
+worker:
+  image:
+    repository: ghcr.io/ebbyboyedev/capstone-voting-app-worker
+    tag: sha-afd82ac
+
