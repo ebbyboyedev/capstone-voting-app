@@ -262,3 +262,5 @@ jobs:
                   --set result.image.tag=sha-${GITHUB_SHA::7} \
                   --set worker.image.tag=sha-${GITHUB_SHA::7} \
                   --wait --timeout 5m
+                  
+      ### Comment to trigger deploy
