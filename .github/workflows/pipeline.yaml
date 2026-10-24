@@ -249,3 +249,16 @@ jobs:
                        echo "$OUT"
                       exit 1
                     fi
+
+            - name: Connect to the cluster
+              if: steps.cluster.outputs.exists == 'true'
+              run: aws eks update-kubeconfig --name capstone_eks --region us-east-1  
+
+            - name: Deploy to EKS
+              if: steps.cluster.outputs.exists == 'true'
+              run: |
+                  helm upgrade --install voting-app ./helm/voting-app \
+                  --set vote.image.tag=sha-${GITHUB_SHA::7} \
+                  --set result.image.tag=sha-${GITHUB_SHA::7} \
+                  --set worker.image.tag=sha-${GITHUB_SHA::7} \
+                  --wait --timeout 5m

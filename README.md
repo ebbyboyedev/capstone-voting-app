@@ -32,7 +32,7 @@ I ran the app with Docker Compose and followed one vote through every hop: the w
 
 - **Pinned base images.** Every `FROM` line that names a registry image uses a tag plus a `sha256` digest, so a build always starts from the same image contents. Stage-only lines such as `FROM base AS final` inherit the pin.
 - **Non-root users.** `vote` runs as `voteuser`, `result` runs as the built-in `node` user, and `worker` runs as `workeruser`. Each was checked with `whoami` inside the running container, and the `final` stage of `vote` was built and checked separately.
-- **`.dockerignore`.** Each service ignores local build output and files that could hold secrets (`__pycache__` and `.env` for `vote`; `bin/`, `obj/` and `.env` `publish/` `artifacts/` for `worker`; `node_modules/` for `result`).
+- **`.dockerignore`.** Each service ignores local build output and files that could hold secrets (`__pycache__` and `.env` for `vote`; `bin/`, `obj/` and `.env` for `worker`; `node_modules/` for `result`).
 
 ## Step 3: Kubernetes cluster with Terraform
 
@@ -61,6 +61,7 @@ One workflow, `.github/workflows/pipeline.yaml`, runs on every push to `main`:
 
 1. **Test** and **Scan** run first, in parallel.
 2. **Build vote**, **Build result** and **Build worker** run only after both succeed (`needs: [test, scan]`). Each builds its image and pushes it to `ghcr.io/ebbyboyedev/capstone-voting-app-<service>`, tagged with the commit SHA (`sha-<short commit>`).
+3. **Deploy** runs only after all three builds succeed. It deploys the new images to the cluster with Helm (see "Automatic deploy" below).
 
 The original standalone build workflows were removed, because they could build and push without passing the test or the scan.
 **Proof the gate works:** I changed the smoke test's expected count to make it fail. Test failed, and none of the three builds ran.
@@ -95,8 +96,48 @@ No secrets are stored in Git.
 
 ## Step 5: Deploy and roll back with Helm
 
-*To do.*
+The chart is in `helm/voting-app`. It has one `values.yaml`. Its templates are the Deployments and Services from the upstream `k8s-specifications` folder (`vote`, `result`, `worker`, Redis and Postgres), and the three app images are now filled in from `values.yaml` (a repository and a tag each), so they point at my own images on `ghcr.io` and not at the upstream author's.
+The three packages on `ghcr.io` are public, so the cluster can pull them without credentials.
 
-## Architecture diagram
+Install it (with the cluster running and `kubectl` connected):
 
-*To do.*
+```
+helm install voting-app ./helm/voting-app
+kubectl get pods
+```
+
+All five pods reach `Running`. To check it end to end, I forwarded the two web pages to my laptop and cast a vote:
+
+```
+kubectl port-forward svc/vote 8090:8080
+kubectl port-forward svc/result 8091:8081
+```
+
+The vote appeared on the result page.
+
+### Rollback demo
+
+1. In `values.yaml` I set the `vote` image tag to a value that is not a valid tag, and ran `helm upgrade voting-app .`.
+2. The new `vote` pod showed `InvalidImageName` and never became ready, but the old pod kept running, because a Deployment replaces pods gradually and keeps the old one until the new one is ready.
+3. `helm history voting-app` listed revision 1 as `superseded` and revision 2 as `deployed`. Helm reports that it delivered the change, not that the app is healthy, so the broken pod was only visible through `kubectl get pods`.
+4. `helm rollback voting-app 1` restored revision 1. The broken pod disappeared and the original pod was still running.
+5. A rollback changes only the cluster, so I restored the local file with `git checkout`.
+
+## Automatic deploy
+
+A `deploy` job in `pipeline.yaml` runs after the three builds:
+
+1. It checks whether the `capstone_eks` cluster exists, using `aws eks describe-cluster`.
+2. **If the cluster does not exist**, the job prints a message and ends green without deploying. This is deliberate: to protect my AWS credits I destroy the cluster whenever I am not working, so a push while it is down still tests, scans, builds and pushes images.
+3. It skips only when AWS answers `ResourceNotFoundException`. Any other error, such as bad credentials, fails the job.
+4. **If the cluster exists**, the job connects with `aws eks update-kubeconfig` and runs `helm upgrade --install voting-app ./helm/voting-app`. It overrides the three image tags with `sha-` plus the first 7 characters of the commit being built, and uses `--wait` so a release whose pods never become ready fails the job.
+
+**Credentials.** The job uses a separate IAM user, `github-deploy`, not my admin user:
+
+- Its only IAM permission is `eks:DescribeCluster` on this one cluster.
+- Inside the cluster, Terraform gives it an access entry with `AmazonEKSEditPolicy`, limited to the `default` namespace.
+- Its access key is stored in GitHub repository secrets (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) and is never written to a file in the repo.
+
+## Architecture
+
+![Architecture diagram](architecture.excalidraw.png)
